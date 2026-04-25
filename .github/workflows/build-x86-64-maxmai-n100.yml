@@ -30,6 +30,7 @@ jobs:
         run: |
           test ! -e files/etc/uci-defaults/99-custom.sh
           test -e overlay-private/files/etc/config/wireless
+          grep -q "option disabled '1'" overlay-private/files/etc/config/wireless
           test -e overlay-private/files/etc/shadow
           git -C overlay-private rev-parse --short HEAD
 
@@ -85,7 +86,8 @@ jobs:
           - Rootfs partsize: ${ROOTFS_PARTSIZE_MB} MB
           - Build repo commit: ${REPO_SHA}
           - Private overlay commit: ${OVERLAY_SHA}
-          - Scope: Wi-Fi/AP, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+
+          - Scope: wired LAN/WAN router, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+
+          - Wi-Fi/AP: disabled by default; external AP remains responsible for Wi-Fi coverage
           - Excluded in this build: OpenClash, Passwall, MosDNS, ZeroTier, Docker, iStore
           - Safety: upstream 99-custom.sh is not included
           EOF
@@ -93,7 +95,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: maxmai-n100-immortalwrt-24.10.5-usb2
+          name: maxmai-n100-immortalwrt-24.10.5-usb2-v3
           path: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
             ${{ github.workspace }}/bin/targets/x86/64/*.manifest
@@ -103,7 +105,7 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2.2.1
         with:
-          tag_name: maxmai-n100-usb2-v2
+          tag_name: maxmai-n100-usb2-v3
           body_path: ${{ github.workspace }}/maxmai-n100-build-info.md
           files: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz

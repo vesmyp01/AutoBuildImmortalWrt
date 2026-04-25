@@ -114,6 +114,21 @@ download_store_ipk() {
     "$output_dir/$file_name"
 }
 
+download_first_available() {
+  local output="$1"
+  shift
+  local url
+
+  for url in "$@"; do
+    if curl -fL --retry 6 --retry-delay 5 --retry-all-errors "$url" -o "$output"; then
+      return 0
+    fi
+    echo "Candidate download failed: $url" | tee -a "$LOGFILE"
+  done
+
+  return 1
+}
+
 echo "Syncing third-party package store requested by shell/custom-packages.sh..." | tee -a "$LOGFILE"
 mkdir -p "$BASE_DIR/extra-packages/luci-app-lucky"
 download_with_fallback \
@@ -150,10 +165,10 @@ download_store_ipk "bandix/luci-i18n-bandix-zh-cn_25.341.50859.dfcede3_all.ipk"
 sh "$BASE_DIR/shell/prepare-packages.sh"
 
 echo "Syncing luci-app-socat from kiddin9 feed..." | tee -a "$LOGFILE"
-KIDDIN9_BASE="https://dl.openwrt.ai/releases/24.10/packages/x86_64/kiddin9"
-download_with_fallback \
-  "${KIDDIN9_BASE}/luci-app-socat_1.0-r9_all.ipk" \
-  "$BASE_DIR/packages/luci-app-socat_1.0-r9_all.ipk"
+download_first_available \
+  "$BASE_DIR/packages/luci-app-socat_1.0-r9_all.ipk" \
+  "https://dl.openwrt.ai/releases/24.10/packages/x86_64/kiddin9/luci-app-socat_1.0-r9_all.ipk" \
+  "https://dl.openwrt.ai/packages-24.10/x86_64/kiddin9/luci-app-socat_1.0-r9_all.ipk"
 
 OFFICIAL_PACKAGES="
 ca-bundle

@@ -103,6 +103,17 @@ download_with_fallback() {
   curl -fL --retry 3 --retry-delay 3 "https://gh-proxy.com/https://${encoded}" -o "$output"
 }
 
+download_store_ipk() {
+  local store_path="$1"
+  local output_dir="$BASE_DIR/extra-packages/${store_path%/*}"
+  local file_name="${store_path##*/}"
+
+  mkdir -p "$output_dir"
+  download_with_fallback \
+    "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/${store_path}" \
+    "$output_dir/$file_name"
+}
+
 echo "Syncing third-party package store requested by shell/custom-packages.sh..." | tee -a "$LOGFILE"
 mkdir -p "$BASE_DIR/extra-packages/luci-app-lucky"
 download_with_fallback \
@@ -114,6 +125,30 @@ download_with_fallback \
 download_with_fallback \
   "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/ssrp_x86_64-190_r126.run" \
   "$BASE_DIR/extra-packages/ssrp_x86_64-190_r126.run"
+download_with_fallback \
+  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/luci-app-store-0.1.32-1_all.run" \
+  "$BASE_DIR/extra-packages/luci-app-store-0.1.32-1_all.run"
+download_with_fallback \
+  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/luci-app-uninstall-v1.2.0.run" \
+  "$BASE_DIR/extra-packages/luci-app-uninstall-v1.2.0.run"
+download_with_fallback \
+  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/momo_v1.1.0_x86_64.run" \
+  "$BASE_DIR/extra-packages/momo_v1.1.0_x86_64.run"
+download_store_ipk "aurora/luci-theme-aurora_0.11.0-r20260208_all.ipk"
+download_store_ipk "aurora-config/luci-app-aurora-config_0.3.0-r20260208_all.ipk"
+download_store_ipk "aurora-config/luci-i18n-aurora-config-zh-cn_26.037.70024.95fddff_all.ipk"
+download_store_ipk "luci-app-partexp/luci-app-partexp_2.0.2-r20251221_all.ipk"
+download_store_ipk "luci-app-partexp/luci-i18n-partexp-zh-cn_25.355.34625.38e15b6_all.ipk"
+download_store_ipk "luci-app-taskplan/luci-app-taskplan_2.2.4_all.ipk"
+download_store_ipk "luci-app-taskplan/luci-i18n-taskplan-zh-cn_all.ipk"
+download_store_ipk "tailscale/luci-app-tailscale_1.2.6_all.ipk"
+download_store_ipk "tailscale/luci-i18n-tailscale-zh-cn_250509.33792_all.ipk"
+download_store_ipk "watchdog/luci-app-watchdog_1.0.6-r20250717_all.ipk"
+download_store_ipk "watchdog/luci-i18n-watchdog-zh-cn_25.191.07803.ff47685_all.ipk"
+download_store_ipk "watchdog/watchdog_1-r5_x86_64.ipk"
+download_store_ipk "bandix/bandix_0.11.0-r1_x86_64.ipk"
+download_store_ipk "bandix/luci-app-bandix_0.11.1-r1_all.ipk"
+download_store_ipk "bandix/luci-i18n-bandix-zh-cn_25.341.50859.dfcede3_all.ipk"
 sh "$BASE_DIR/shell/prepare-packages.sh"
 
 echo "Syncing luci-app-socat from kiddin9 feed..." | tee -a "$LOGFILE"
@@ -209,6 +244,7 @@ REQUIRED_MANIFEST_PACKAGES=(
   "luci-i18n-aurora-config-zh-cn"
   "luci-app-tailscale"
   "luci-i18n-tailscale-zh-cn"
+  "tailscale"
   "momo"
   "luci-app-momo"
   "luci-i18n-momo-zh-cn"
@@ -221,6 +257,7 @@ REQUIRED_MANIFEST_PACKAGES=(
   "luci-i18n-taskplan-zh-cn"
   "luci-app-bandix"
   "luci-i18n-bandix-zh-cn"
+  "bandix"
   "luci-app-store"
 )
 

@@ -1,0 +1,4 @@
+bin/
+overlay-private/
+usb-clone-work/
+*.log

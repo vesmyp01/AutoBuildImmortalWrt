@@ -1,0 +1,102 @@
+name: build-x86-64-maxmai-n100
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  IMMWRT_VERSION: "24.10.5"
+  ROOTFS_PARTSIZE_MB: "4096"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout build repo
+        uses: actions/checkout@v4
+
+      - name: Checkout private overlay
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.MAXMAI_OVERLAY_REPO }}
+          ssh-key: ${{ secrets.MAXMAI_OVERLAY_SSH_KEY }}
+          path: overlay-private
+          persist-credentials: false
+
+      - name: Preflight
+        run: |
+          test ! -e files/etc/uci-defaults/99-custom.sh
+          test -e overlay-private/files/etc/config/wireless
+          test -e overlay-private/files/etc/shadow
+          git -C overlay-private rev-parse --short HEAD
+
+      - name: Set executable permissions
+        run: chmod +x "${{ github.workspace }}/x86-64/build24-maxmai-n100.sh"
+
+      - name: Build MaxMai N100 ImmortalWrt image
+        run: |
+          docker run --rm -i \
+            --user root \
+            -v "${{ github.workspace }}/bin:/home/build/immortalwrt/bin" \
+            -v "${{ github.workspace }}/files:/home/build/immortalwrt/files" \
+            -v "${{ github.workspace }}/overlay-private:/home/build/immortalwrt/overlay-private:ro" \
+            -v "${{ github.workspace }}/x86-64/imm.config:/home/build/immortalwrt/.config:ro" \
+            -v "${{ github.workspace }}/shell:/home/build/immortalwrt/shell" \
+            -v "${{ github.workspace }}/x86-64/build24-maxmai-n100.sh:/home/build/immortalwrt/build.sh:ro" \
+            -e ROOTFS_PARTSIZE="${ROOTFS_PARTSIZE_MB}" \
+            immortalwrt/imagebuilder:x86-64-openwrt-${IMMWRT_VERSION} \
+            /bin/bash /home/build/immortalwrt/build.sh
+
+      - name: Verify output
+        run: |
+          set -euo pipefail
+          cd "${{ github.workspace }}/bin/targets/x86/64"
+          IMG="$(ls *squashfs-combined-efi.img.gz | head -n 1)"
+          MANIFEST="$(ls *.manifest | head -n 1)"
+          gzip -t "$IMG"
+          sha256sum "$IMG" "$MANIFEST" > maxmai-n100-sha256.txt
+          for pkg in wpad-openssl iw iwinfo wireless-regdb kmod-mac80211 luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-lucky lucky luci-app-ssr-plus; do
+            grep -Eq "^${pkg} -" "$MANIFEST"
+          done
+
+      - name: Create build notes
+        run: |
+          REPO_SHA="$(git rev-parse --short HEAD)"
+          OVERLAY_SHA="$(git -C overlay-private rev-parse --short HEAD)"
+          cat > "${{ github.workspace }}/maxmai-n100-build-info.md" <<EOF
+          ## MaxMai N100 USB-2 ImmortalWrt Build
+
+          - Base version: ${IMMWRT_VERSION}
+          - Rootfs partsize: ${ROOTFS_PARTSIZE_MB} MB
+          - Build repo commit: ${REPO_SHA}
+          - Private overlay commit: ${OVERLAY_SHA}
+          - Scope: Wi-Fi/AP, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+
+          - Excluded in this build: OpenClash, Passwall, MosDNS, ZeroTier, Docker, iStore
+          - Safety: upstream 99-custom.sh is not included
+          EOF
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: maxmai-n100-immortalwrt-24.10.5-usb2
+          path: |
+            ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
+            ${{ github.workspace }}/bin/targets/x86/64/*.manifest
+            ${{ github.workspace }}/bin/targets/x86/64/maxmai-n100-sha256.txt
+            ${{ github.workspace }}/maxmai-n100-build-info.md
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2.2.1
+        with:
+          tag_name: maxmai-n100-usb2-v2
+          body_path: ${{ github.workspace }}/maxmai-n100-build-info.md
+          files: |
+            ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
+            ${{ github.workspace }}/bin/targets/x86/64/*.manifest
+            ${{ github.workspace }}/bin/targets/x86/64/maxmai-n100-sha256.txt
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

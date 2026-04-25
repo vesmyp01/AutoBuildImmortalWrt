@@ -110,32 +110,9 @@ sh "$BASE_DIR/shell/prepare-packages.sh"
 
 echo "Syncing luci-app-socat from kiddin9 feed..." | tee -a "$LOGFILE"
 KIDDIN9_BASE="https://dl.openwrt.ai/releases/24.10/packages/x86_64/kiddin9"
-KIDDIN9_INDEX="/tmp/kiddin9-Packages"
-curl -fsSL "${KIDDIN9_BASE}/Packages.gz" | gunzip -c > "$KIDDIN9_INDEX"
-
-fetch_kiddin9_ipk() {
-  local package_name="$1"
-  local file_name
-  file_name="$(
-    awk -v pkg="$package_name" '
-      $1 == "Package:" && $2 == pkg { found = 1; next }
-      found && $1 == "Filename:" { print $2; exit }
-      found && $1 == "Package:" { exit }
-    ' "$KIDDIN9_INDEX"
-  )"
-
-  if [ -z "$file_name" ]; then
-    echo "Unable to resolve package from kiddin9 feed: $package_name" >&2
-    return 1
-  fi
-
-  curl -fsSL "${KIDDIN9_BASE}/${file_name}" -o "$BASE_DIR/packages/$(basename "$file_name")"
-}
-
-fetch_kiddin9_ipk "luci-app-socat"
-if ! fetch_kiddin9_ipk "luci-i18n-socat-zh-cn"; then
-  echo "Optional package missing: luci-i18n-socat-zh-cn" | tee -a "$LOGFILE"
-fi
+download_with_fallback \
+  "${KIDDIN9_BASE}/luci-app-socat_1.0-r9_all.ipk" \
+  "$BASE_DIR/packages/luci-app-socat_1.0-r9_all.ipk"
 
 OFFICIAL_PACKAGES="
 ca-bundle

@@ -9,6 +9,7 @@ fi
 
 cd "$BASE_DIR"
 
+CUSTOM_PACKAGES="${CUSTOM_PACKAGES:-}"
 source "$BASE_DIR/shell/custom-packages.sh"
 source "$BASE_DIR/shell/switch_repository.sh"
 

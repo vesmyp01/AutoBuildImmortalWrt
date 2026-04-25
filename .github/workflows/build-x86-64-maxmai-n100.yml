@@ -54,6 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "${{ github.workspace }}/bin/targets/x86/64"
+          sudo chown -R "$(id -u):$(id -g)" .
           IMG="$(ls *squashfs-combined-efi.img.gz | head -n 1)"
           MANIFEST="$(ls *.manifest | head -n 1)"
           RAW_TMP="$(mktemp)"

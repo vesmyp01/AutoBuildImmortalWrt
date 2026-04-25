@@ -56,15 +56,17 @@ jobs:
           cd "${{ github.workspace }}/bin/targets/x86/64"
           IMG="$(ls *squashfs-combined-efi.img.gz | head -n 1)"
           MANIFEST="$(ls *.manifest | head -n 1)"
-          RAW="${IMG%.gz}"
+          RAW_TMP="$(mktemp)"
           set +e
-          gzip -dc "$IMG" > "$RAW"
+          gzip -dc "$IMG" > "$RAW_TMP"
           gzip_status="$?"
           set -e
           if [ "$gzip_status" -ne 0 ] && [ "$gzip_status" -ne 2 ]; then
             exit "$gzip_status"
           fi
-          gzip -n -9 -f "$RAW"
+          gzip -n -9 -c "$RAW_TMP" > "${IMG}.tmp"
+          mv "${IMG}.tmp" "$IMG"
+          rm -f "$RAW_TMP"
           gzip -t "$IMG"
           sha256sum "$IMG" "$MANIFEST" > maxmai-n100-sha256.txt
           for pkg in wpad-openssl iw iwinfo wireless-regdb kmod-mac80211 luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-lucky lucky luci-app-ssr-plus; do

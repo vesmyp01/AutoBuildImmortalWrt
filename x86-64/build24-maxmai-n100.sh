@@ -30,6 +30,7 @@ REQUIRED_FILES=(
   "files/etc/config/ddns-go"
   "files/etc/config/lucky"
   "files/etc/config/shadowsocksr"
+  "files/etc/config/luci"
   "files/etc/crontabs/root"
   "files/etc/dropbear/authorized_keys"
   "files/etc/passwd"
@@ -45,7 +46,6 @@ OPTIONAL_PATHS=(
   "files/etc/ddns-go/ddns-go-config.yaml"
   "files/etc/config/lucky.daji"
   "files/etc/config/argon"
-  "files/etc/config/luci"
   "files/etc/config/uhttpd"
   "files/etc/dropbear/dropbear_ed25519_host_key"
   "files/etc/dropbear/dropbear_rsa_host_key"
@@ -67,6 +67,14 @@ for rel in "${REQUIRED_FILES[@]}"; do
     exit 1
   fi
 done
+
+grep -q "option mediaurlbase '/luci-static/argon'" "$OVERLAY_DIR/files/etc/config/luci"
+grep -q "option Argon '/luci-static/argon'" "$OVERLAY_DIR/files/etc/config/luci"
+grep -q "option Aurora '/luci-static/aurora'" "$OVERLAY_DIR/files/etc/config/luci"
+if grep -q "/luci-static/ifit" "$OVERLAY_DIR/files/etc/config/luci"; then
+  echo "Overlay LuCI config still references missing ifit theme." >&2
+  exit 1
+fi
 
 rm -f "$FILES_DIR/etc/uci-defaults/99-custom.sh"
 mkdir -p "$FILES_DIR"
@@ -189,14 +197,58 @@ REQUIRED_MANIFEST_PACKAGES=(
   "socat"
   "ddns-go"
   "luci-app-ddns-go"
+  "luci-app-ddns"
   "luci-app-lucky"
   "lucky"
   "luci-app-ssr-plus"
+  "luci-theme-argon"
+  "luci-app-argon-config"
+  "luci-i18n-argon-config-zh-cn"
+  "luci-theme-aurora"
+  "luci-app-aurora-config"
+  "luci-i18n-aurora-config-zh-cn"
+  "luci-app-tailscale"
+  "luci-i18n-tailscale-zh-cn"
+  "momo"
+  "luci-app-momo"
+  "luci-i18n-momo-zh-cn"
+  "luci-app-uninstall"
+  "luci-app-partexp"
+  "luci-i18n-partexp-zh-cn"
+  "luci-app-watchdog"
+  "luci-i18n-watchdog-zh-cn"
+  "luci-app-taskplan"
+  "luci-i18n-taskplan-zh-cn"
+  "luci-app-bandix"
+  "luci-i18n-bandix-zh-cn"
+  "luci-app-store"
 )
 
 for pkg in "${REQUIRED_MANIFEST_PACKAGES[@]}"; do
   if ! grep -Eq "^${pkg} -" "$MANIFEST"; then
     echo "Generated manifest is missing required package: $pkg" >&2
+    exit 1
+  fi
+done
+
+PROHIBITED_MANIFEST_PACKAGES=(
+  "luci-app-openvpn-server"
+  "luci-app-nekobox"
+  "luci-app-mosdns"
+  "luci-app-passwall2"
+  "luci-app-openclash"
+  "luci-app-zerotier"
+  "luci-app-adguardhome"
+  "luci-app-turboacc"
+  "luci-app-gecoosac"
+  "luci-app-unishare"
+  "luci-app-appfilter"
+  "luci-app-netwizard"
+)
+
+for pkg in "${PROHIBITED_MANIFEST_PACKAGES[@]}"; do
+  if grep -Eq "^${pkg} -" "$MANIFEST"; then
+    echo "Generated manifest contains prohibited package: $pkg" >&2
     exit 1
   fi
 done

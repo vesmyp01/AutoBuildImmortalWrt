@@ -39,7 +39,15 @@ jobs:
           ! grep -q "option ifname 'eth0'" overlay-private/files/etc/config/network
           grep -q "option device 'eth1'" overlay-private/files/etc/config/network
           grep -q "list server '1.1.1.1'" overlay-private/files/etc/config/dhcp
+          grep -q "option mediaurlbase '/luci-static/argon'" overlay-private/files/etc/config/luci
+          grep -q "option Argon '/luci-static/argon'" overlay-private/files/etc/config/luci
+          grep -q "option Aurora '/luci-static/aurora'" overlay-private/files/etc/config/luci
+          ! grep -q "/luci-static/ifit" overlay-private/files/etc/config/luci
           test -e overlay-private/files/etc/shadow
+          grep -q "luci-theme-aurora" shell/custom-packages.sh
+          grep -q "luci-app-tailscale" shell/custom-packages.sh
+          grep -q "luci-app-momo" shell/custom-packages.sh
+          grep -q "luci-app-store" shell/custom-packages.sh
           git -C overlay-private rev-parse --short HEAD
 
       - name: Set executable permissions
@@ -79,8 +87,11 @@ jobs:
           rm -f "$RAW_TMP"
           gzip -t "$IMG"
           sha256sum "$IMG" "$MANIFEST" > maxmai-n100-sha256.txt
-          for pkg in wpad-openssl iw iwinfo wireless-regdb kmod-mac80211 luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-lucky lucky luci-app-ssr-plus; do
+          for pkg in wpad-openssl iw iwinfo wireless-regdb kmod-mac80211 luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-ddns luci-app-lucky lucky luci-app-ssr-plus luci-theme-argon luci-app-argon-config luci-theme-aurora luci-app-aurora-config luci-app-tailscale luci-app-momo momo luci-app-uninstall luci-app-partexp luci-app-watchdog luci-app-taskplan luci-app-bandix luci-app-store; do
             grep -Eq "^${pkg} -" "$MANIFEST"
+          done
+          for pkg in luci-app-openclash luci-app-passwall2 luci-app-mosdns luci-app-zerotier luci-app-adguardhome luci-app-turboacc luci-app-nekobox luci-app-openvpn-server luci-app-gecoosac luci-app-unishare luci-app-appfilter luci-app-netwizard; do
+            ! grep -Eq "^${pkg} -" "$MANIFEST"
           done
 
       - name: Create build notes
@@ -94,18 +105,19 @@ jobs:
           - Rootfs partsize: ${ROOTFS_PARTSIZE_MB} MB
           - Build repo commit: ${REPO_SHA}
           - Private overlay commit: ${OVERLAY_SHA}
-          - Scope: wired LAN/WAN router, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+
+          - Scope: wired LAN/WAN router, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+, Tailscale, Momo, iStore
+          - LuCI theme: Argon sidebar by default, Aurora installed as standby
           - Wi-Fi/AP: disabled by default; external AP remains responsible for Wi-Fi coverage
           - LAN bridge: native br-lan device, fixed MAC e4:3a:6e:84:35:2d
           - DHCP/DNS: upstream DNS restored from the working OpenWrt config
-          - Excluded in this build: OpenClash, Passwall, MosDNS, ZeroTier, Docker, iStore
+          - Excluded in this build: OpenClash, Passwall2, MosDNS, ZeroTier, Docker, OpenVPN Server, NekoBox, HomeProxy/Nikki, AdGuard Home, TurboAcc, EasyTier
           - Safety: upstream 99-custom.sh is not included
           EOF
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: maxmai-n100-immortalwrt-24.10.5-usb2-v4
+          name: maxmai-n100-immortalwrt-24.10.5-usb2-v5
           path: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
             ${{ github.workspace }}/bin/targets/x86/64/*.manifest
@@ -115,7 +127,7 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2.2.1
         with:
-          tag_name: maxmai-n100-usb2-v4
+          tag_name: maxmai-n100-usb2-v5
           body_path: ${{ github.workspace }}/maxmai-n100-build-info.md
           files: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz

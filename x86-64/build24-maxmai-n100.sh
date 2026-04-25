@@ -141,8 +141,6 @@ download_store_ipk "luci-app-partexp/luci-app-partexp_2.0.2-r20251221_all.ipk"
 download_store_ipk "luci-app-partexp/luci-i18n-partexp-zh-cn_25.355.34625.38e15b6_all.ipk"
 download_store_ipk "luci-app-taskplan/luci-app-taskplan_2.2.4_all.ipk"
 download_store_ipk "luci-app-taskplan/luci-i18n-taskplan-zh-cn_all.ipk"
-download_store_ipk "tailscale/luci-app-tailscale_1.2.6_all.ipk"
-download_store_ipk "tailscale/luci-i18n-tailscale-zh-cn_250509.33792_all.ipk"
 download_store_ipk "watchdog/luci-app-watchdog_1.0.6-r20250717_all.ipk"
 download_store_ipk "watchdog/luci-i18n-watchdog-zh-cn_25.191.07803.ff47685_all.ipk"
 download_store_ipk "watchdog/watchdog_1-r5_x86_64.ipk"
@@ -242,8 +240,6 @@ REQUIRED_MANIFEST_PACKAGES=(
   "luci-theme-aurora"
   "luci-app-aurora-config"
   "luci-i18n-aurora-config-zh-cn"
-  "luci-app-tailscale"
-  "luci-i18n-tailscale-zh-cn"
   "tailscale"
   "momo"
   "luci-app-momo"
@@ -281,6 +277,7 @@ PROHIBITED_MANIFEST_PACKAGES=(
   "luci-app-unishare"
   "luci-app-appfilter"
   "luci-app-netwizard"
+  "luci-app-tailscale"
 )
 
 for pkg in "${PROHIBITED_MANIFEST_PACKAGES[@]}"; do

@@ -45,7 +45,7 @@ jobs:
           ! grep -q "/luci-static/ifit" overlay-private/files/etc/config/luci
           test -e overlay-private/files/etc/shadow
           grep -q "luci-theme-aurora" shell/custom-packages.sh
-          grep -q "luci-app-tailscale" shell/custom-packages.sh
+          grep -q "tailscale" shell/custom-packages.sh
           grep -q "luci-app-momo" shell/custom-packages.sh
           grep -q "luci-app-store" shell/custom-packages.sh
           git -C overlay-private rev-parse --short HEAD
@@ -87,10 +87,10 @@ jobs:
           rm -f "$RAW_TMP"
           gzip -t "$IMG"
           sha256sum "$IMG" "$MANIFEST" > maxmai-n100-sha256.txt
-          for pkg in wpad-openssl iw iwinfo wireless-regdb kmod-mac80211 luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-ddns luci-app-lucky lucky luci-app-ssr-plus luci-theme-argon luci-app-argon-config luci-theme-aurora luci-app-aurora-config luci-app-tailscale tailscale luci-app-momo momo luci-app-uninstall luci-app-partexp luci-app-watchdog luci-app-taskplan luci-app-bandix bandix luci-app-store; do
+          for pkg in wpad-openssl iw iwinfo wireless-regdb kmod-mac80211 luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-ddns luci-app-lucky lucky luci-app-ssr-plus luci-theme-argon luci-app-argon-config luci-theme-aurora luci-app-aurora-config tailscale luci-app-momo momo luci-app-uninstall luci-app-partexp luci-app-watchdog luci-app-taskplan luci-app-bandix bandix luci-app-store; do
             grep -Eq "^${pkg} -" "$MANIFEST"
           done
-          for pkg in luci-app-openclash luci-app-passwall2 luci-app-mosdns luci-app-zerotier luci-app-adguardhome luci-app-turboacc luci-app-nekobox luci-app-openvpn-server luci-app-gecoosac luci-app-unishare luci-app-appfilter luci-app-netwizard; do
+          for pkg in luci-app-openclash luci-app-passwall2 luci-app-mosdns luci-app-zerotier luci-app-adguardhome luci-app-turboacc luci-app-nekobox luci-app-openvpn-server luci-app-gecoosac luci-app-unishare luci-app-appfilter luci-app-netwizard luci-app-tailscale; do
             ! grep -Eq "^${pkg} -" "$MANIFEST"
           done
 

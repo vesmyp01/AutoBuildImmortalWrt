@@ -189,6 +189,7 @@ luci-proto-wireguard
 kmod-wireguard
 wireguard-tools
 socat
+luci-app-socat
 luci-app-ddns
 luci-app-ddns-go
 ddns-go
@@ -243,6 +244,7 @@ REQUIRED_MANIFEST_PACKAGES=(
   "luci-proto-wireguard"
   "wireguard-tools"
   "socat"
+  "luci-app-socat"
   "ddns-go"
   "luci-app-ddns-go"
   "luci-app-ddns"

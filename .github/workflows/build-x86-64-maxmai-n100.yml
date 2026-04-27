@@ -1,4 +1,4 @@
-name: build-x86-64-maxmai-n100
+name: build-x86-64-maxmai-n100-v5-fix
 
 on:
   workflow_dispatch:
@@ -38,11 +38,24 @@ jobs:
           grep -q "option device 'br-lan'" overlay-private/files/etc/config/network
           ! grep -q "option ifname 'eth0'" overlay-private/files/etc/config/network
           grep -q "option device 'eth1'" overlay-private/files/etc/config/network
+          grep -q "config interface 'tailscale'" overlay-private/files/etc/config/network
+          grep -q "option device 'tailscale0'" overlay-private/files/etc/config/network
           grep -q "list server '1.1.1.1'" overlay-private/files/etc/config/dhcp
+          ! grep -q "enable_tftp" overlay-private/files/etc/config/dhcp
+          ! grep -q "dhcp_boot" overlay-private/files/etc/config/dhcp
+          ! grep -q "tftp_root" overlay-private/files/etc/config/dhcp
           grep -q "option mediaurlbase '/luci-static/argon'" overlay-private/files/etc/config/luci
           grep -q "option Argon '/luci-static/argon'" overlay-private/files/etc/config/luci
           grep -q "option Aurora '/luci-static/aurora'" overlay-private/files/etc/config/luci
           ! grep -q "/luci-static/ifit" overlay-private/files/etc/config/luci
+          grep -q "tailscale" overlay-private/files/etc/config/firewall
+          grep -q "option global_server 'maxmai_default'" overlay-private/files/etc/config/shadowsocksr
+          grep -q "config servers 'maxmai_default'" overlay-private/files/etc/config/shadowsocksr
+          grep -q "list Interface 'tailscale'" overlay-private/files/etc/config/shadowsocksr
+          grep -q "100.64.0.0/10" overlay-private/files/etc/config/shadowsocksr
+          ! grep -q "30088" overlay-private/files/etc/config/socat
+          ! grep -q "30088" overlay-private/files/etc/config/firewall
+          test -e overlay-private/files/etc/config/tailscale
           test -e overlay-private/files/etc/shadow
           grep -q "luci-theme-aurora" shell/custom-packages.sh
           grep -q "tailscale" shell/custom-packages.sh
@@ -82,6 +95,39 @@ jobs:
           if [ "$gzip_status" -ne 0 ] && [ "$gzip_status" -ne 2 ]; then
             exit "$gzip_status"
           fi
+          LOOP="$(sudo losetup --find --partscan --show "$RAW_TMP")"
+          sudo partprobe "$LOOP" || true
+          sleep 1
+          BOOT_MNT="$(mktemp -d)"
+          ROOT_MNT="$(mktemp -d)"
+          cleanup_loop() {
+            sudo umount "$BOOT_MNT" 2>/dev/null || true
+            sudo umount "$ROOT_MNT" 2>/dev/null || true
+            sudo losetup -d "$LOOP" 2>/dev/null || true
+            rmdir "$BOOT_MNT" "$ROOT_MNT" 2>/dev/null || true
+          }
+          trap cleanup_loop EXIT
+          sudo mount "${LOOP}p1" "$BOOT_MNT"
+          sudo sed -i 's/^set timeout=.*/set timeout="0"/' "$BOOT_MNT/boot/grub/grub.cfg"
+          grep -q 'set timeout="0"' "$BOOT_MNT/boot/grub/grub.cfg"
+          grep -q 'menuentry "ImmortalWrt"' "$BOOT_MNT/boot/grub/grub.cfg"
+          grep -q 'menuentry "ImmortalWrt (failsafe)"' "$BOOT_MNT/boot/grub/grub.cfg"
+          sudo umount "$BOOT_MNT"
+          sudo mount -o ro "${LOOP}p2" "$ROOT_MNT"
+          sudo test -f "$ROOT_MNT/etc/config/dhcp"
+          sudo test -f "$ROOT_MNT/etc/config/shadowsocksr"
+          sudo test -f "$ROOT_MNT/etc/config/socat"
+          sudo test -f "$ROOT_MNT/etc/config/tailscale"
+          ! sudo grep -q "30088" "$ROOT_MNT/etc/config/socat"
+          ! sudo grep -q "30088" "$ROOT_MNT/etc/config/firewall"
+          ! sudo grep -q "enable_tftp" "$ROOT_MNT/etc/config/dhcp"
+          sudo grep -q "option global_server 'maxmai_default'" "$ROOT_MNT/etc/config/shadowsocksr"
+          sudo grep -q "list Interface 'tailscale'" "$ROOT_MNT/etc/config/shadowsocksr"
+          sudo grep -q "100.64.0.0/10" "$ROOT_MNT/etc/config/shadowsocksr"
+          sudo umount "$ROOT_MNT"
+          sudo losetup -d "$LOOP"
+          trap - EXIT
+          rmdir "$BOOT_MNT" "$ROOT_MNT"
           gzip -n -9 -c "$RAW_TMP" > "${IMG}.tmp"
           mv "${IMG}.tmp" "$IMG"
           rm -f "$RAW_TMP"
@@ -99,7 +145,7 @@ jobs:
           REPO_SHA="$(git rev-parse --short HEAD)"
           OVERLAY_SHA="$(git -C overlay-private rev-parse --short HEAD)"
           cat > "${{ github.workspace }}/maxmai-n100-build-info.md" <<EOF
-          ## MaxMai N100 USB-2 ImmortalWrt Build
+          ## MaxMai N100 ImmortalWrt V5-Fix Build
 
           - Base version: ${IMMWRT_VERSION}
           - Rootfs partsize: ${ROOTFS_PARTSIZE_MB} MB
@@ -109,7 +155,11 @@ jobs:
           - LuCI theme: Argon sidebar by default, Aurora installed as standby
           - Wi-Fi/AP: disabled by default; external AP remains responsible for Wi-Fi coverage
           - LAN bridge: native br-lan device, fixed MAC e4:3a:6e:84:35:2d
-          - DHCP/DNS: upstream DNS restored from the working OpenWrt config
+          - DHCP/DNS: TFTP/PXE removed; upstream DNS restored from the working OpenWrt config
+          - SSR+: fixed default global_server and added Tailscale access-control scope
+          - Tailscale: installed and prepared for manual login as exit node/subnet router
+          - Socat: removed 30088 management-plane exposure
+          - Boot: GRUB timeout is set to 0 while keeping failsafe entry
           - Excluded in this build: OpenClash, Passwall2, MosDNS, ZeroTier, Docker, OpenVPN Server, NekoBox, HomeProxy/Nikki, AdGuard Home, TurboAcc, EasyTier
           - Safety: upstream 99-custom.sh is not included
           EOF
@@ -117,7 +167,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: maxmai-n100-immortalwrt-24.10.5-usb2-v5
+          name: maxmai-n100-immortalwrt-24.10.5-v5-fix
           path: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
             ${{ github.workspace }}/bin/targets/x86/64/*.manifest
@@ -127,7 +177,7 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2.2.1
         with:
-          tag_name: maxmai-n100-usb2-v5
+          tag_name: maxmai-n100-usb2-v5-fix
           body_path: ${{ github.workspace }}/maxmai-n100-build-info.md
           files: |
             ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz

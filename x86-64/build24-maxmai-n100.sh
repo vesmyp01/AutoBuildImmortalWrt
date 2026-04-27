@@ -31,6 +31,7 @@ REQUIRED_FILES=(
   "files/etc/config/lucky"
   "files/etc/config/shadowsocksr"
   "files/etc/config/luci"
+  "files/etc/config/tailscale"
   "files/etc/crontabs/root"
   "files/etc/dropbear/authorized_keys"
   "files/etc/passwd"
@@ -71,6 +72,21 @@ done
 grep -q "option mediaurlbase '/luci-static/argon'" "$OVERLAY_DIR/files/etc/config/luci"
 grep -q "option Argon '/luci-static/argon'" "$OVERLAY_DIR/files/etc/config/luci"
 grep -q "option Aurora '/luci-static/aurora'" "$OVERLAY_DIR/files/etc/config/luci"
+grep -q "config interface 'tailscale'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "option device 'tailscale0'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "tailscale" "$OVERLAY_DIR/files/etc/config/firewall"
+grep -q "option global_server 'maxmai_default'" "$OVERLAY_DIR/files/etc/config/shadowsocksr"
+grep -q "config servers 'maxmai_default'" "$OVERLAY_DIR/files/etc/config/shadowsocksr"
+grep -q "list Interface 'tailscale'" "$OVERLAY_DIR/files/etc/config/shadowsocksr"
+grep -q "100.64.0.0/10" "$OVERLAY_DIR/files/etc/config/shadowsocksr"
+if grep -qE "enable_tftp|dhcp_boot|tftp_root" "$OVERLAY_DIR/files/etc/config/dhcp"; then
+  echo "Overlay DHCP config still contains unused TFTP/PXE options." >&2
+  exit 1
+fi
+if grep -q "30088" "$OVERLAY_DIR/files/etc/config/socat" "$OVERLAY_DIR/files/etc/config/firewall"; then
+  echo "Overlay still contains the disabled 30088 management-plane exposure." >&2
+  exit 1
+fi
 if grep -q "/luci-static/ifit" "$OVERLAY_DIR/files/etc/config/luci"; then
   echo "Overlay LuCI config still references missing ifit theme." >&2
   exit 1

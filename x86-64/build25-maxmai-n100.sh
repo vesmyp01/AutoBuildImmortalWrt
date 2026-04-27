@@ -9,7 +9,11 @@ fi
 
 cd "$BASE_DIR"
 
-source "$BASE_DIR/shell/switch_repository.sh"
+if [ -f "$BASE_DIR/repositories.conf" ] && [ -f "$BASE_DIR/shell/switch_repository.sh" ]; then
+  source "$BASE_DIR/shell/switch_repository.sh"
+else
+  echo "repositories.conf not present in this 25.12 imagebuilder; keeping default repositories"
+fi
 
 FILES_DIR="${FILES_DIR:-$BASE_DIR/files}"
 OVERLAY_DIR="${OVERLAY_DIR:-$BASE_DIR/overlay-private}"

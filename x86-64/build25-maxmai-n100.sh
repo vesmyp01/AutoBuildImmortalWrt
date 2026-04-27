@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ -d "/home/build/immortalwrt" ] && [ -f "/home/build/immortalwrt/shell/custom-packages.sh" ]; then
+if [ -d "/home/build/immortalwrt" ]; then
   BASE_DIR="${BASE_DIR:-/home/build/immortalwrt}"
 else
   BASE_DIR="${BASE_DIR:-$(pwd)}"
@@ -9,14 +9,12 @@ fi
 
 cd "$BASE_DIR"
 
-CUSTOM_PACKAGES="${CUSTOM_PACKAGES:-}"
-source "$BASE_DIR/shell/custom-packages.sh"
 source "$BASE_DIR/shell/switch_repository.sh"
 
 FILES_DIR="${FILES_DIR:-$BASE_DIR/files}"
 OVERLAY_DIR="${OVERLAY_DIR:-$BASE_DIR/overlay-private}"
 ROOTFS_PARTSIZE="${ROOTFS_PARTSIZE:-4096}"
-LOGFILE="${LOGFILE:-/tmp/maxmai-n100-build.log}"
+LOGFILE="${LOGFILE:-/tmp/maxmai-n100-build25.log}"
 
 REQUIRED_FILES=(
   "files/etc/config/network"
@@ -36,9 +34,12 @@ REQUIRED_FILES=(
   "files/etc/passwd"
   "files/etc/shadow"
   "files/etc/group"
+  "files/etc/init.d/maxmai-ssr-bridge"
+  "files/usr/bin/maxmai-ssr-bridge-rules"
 )
 
 OPTIONAL_PATHS=(
+  "files/etc/config/tailscale"
   "files/etc/firewall.user"
   "files/etc/hosts"
   "files/etc/rc.local"
@@ -51,7 +52,7 @@ OPTIONAL_PATHS=(
   "files/etc/dropbear/dropbear_rsa_host_key"
 )
 
-echo "Starting MaxMai N100 USB-2 build at $(date)" | tee -a "$LOGFILE"
+echo "Starting MaxMai N100 USB-2 25.12 build at $(date)" | tee -a "$LOGFILE"
 echo "Base directory: $BASE_DIR" | tee -a "$LOGFILE"
 echo "Overlay directory: $OVERLAY_DIR" | tee -a "$LOGFILE"
 echo "Rootfs partsize: ${ROOTFS_PARTSIZE} MB" | tee -a "$LOGFILE"
@@ -71,6 +72,18 @@ done
 grep -q "option mediaurlbase '/luci-static/argon'" "$OVERLAY_DIR/files/etc/config/luci"
 grep -q "option Argon '/luci-static/argon'" "$OVERLAY_DIR/files/etc/config/luci"
 grep -q "option Aurora '/luci-static/aurora'" "$OVERLAY_DIR/files/etc/config/luci"
+grep -q "config device 'br_lan'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "option name 'br-lan'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "list ports 'eth0'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "option macaddr 'e4:3a:6e:84:35:2d'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "option device 'br-lan'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "option device 'eth1'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "config interface 'tailscale'" "$OVERLAY_DIR/files/etc/config/network"
+grep -q "tailscale" "$OVERLAY_DIR/files/etc/config/firewall"
+grep -q "list Interface 'tailscale'" "$OVERLAY_DIR/files/etc/config/shadowsocksr"
+grep -q "100.64.0.0/10" "$OVERLAY_DIR/files/etc/config/shadowsocksr"
+grep -q "maxmai-ssr-bridge-rules" "$OVERLAY_DIR/files/etc/firewall.user"
+grep -q "option disabled '1'" "$OVERLAY_DIR/files/etc/config/wireless"
 if grep -q "/luci-static/ifit" "$OVERLAY_DIR/files/etc/config/luci"; then
   echo "Overlay LuCI config still references missing ifit theme." >&2
   exit 1
@@ -82,6 +95,8 @@ cp -a "$OVERLAY_DIR/files/." "$FILES_DIR/"
 
 chmod 600 "$FILES_DIR/etc/shadow"
 chmod 600 "$FILES_DIR/etc/dropbear/dropbear_"*"_host_key" 2>/dev/null || true
+chmod +x "$FILES_DIR/etc/init.d/maxmai-ssr-bridge"
+chmod +x "$FILES_DIR/usr/bin/maxmai-ssr-bridge-rules"
 
 for rel in "${OPTIONAL_PATHS[@]}"; do
   if [ -e "$OVERLAY_DIR/$rel" ]; then
@@ -103,72 +118,66 @@ download_with_fallback() {
   curl -fL --retry 3 --retry-delay 3 "https://gh-proxy.com/https://${encoded}" -o "$output"
 }
 
-download_store_ipk() {
-  local store_path="$1"
-  local output_dir="$BASE_DIR/extra-packages/${store_path%/*}"
-  local file_name="${store_path##*/}"
+clone_with_fallback() {
+  local url="$1"
+  local dest="$2"
+  local encoded
+  encoded="${url#https://}"
 
-  mkdir -p "$output_dir"
-  download_with_fallback \
-    "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/${store_path}" \
-    "$output_dir/$file_name"
+  if git clone --depth=1 "$url" "$dest"; then
+    return 0
+  fi
+
+  echo "Primary clone failed, trying gh-proxy for: $url" | tee -a "$LOGFILE"
+  git clone --depth=1 "https://gh-proxy.com/https://${encoded}" "$dest"
 }
 
-download_first_available() {
-  local output="$1"
-  shift
-  local url
+MAXMAI_APK_PACKAGES="
+luci-app-store
+luci-app-uninstall
+luci-theme-aurora
+luci-app-aurora-config
+luci-i18n-aurora-config-zh-cn
+luci-app-ssr-plus
+momo
+luci-app-momo
+luci-i18n-momo-zh-cn
+luci-app-partexp
+luci-i18n-partexp-zh-cn
+luci-app-watchdog
+luci-i18n-watchdog-zh-cn
+luci-app-taskplan
+luci-i18n-taskplan-zh-cn
+bandix
+luci-app-bandix
+luci-i18n-bandix-zh-cn
+luci-app-lucky
+lucky
+nikki
+luci-app-nikki
+luci-i18n-nikki-zh-cn
+"
 
-  for url in "$@"; do
-    if curl -fL --retry 6 --retry-delay 5 --retry-all-errors "$url" -o "$output"; then
-      return 0
-    fi
-    echo "Candidate download failed: $url" | tee -a "$LOGFILE"
-  done
+echo "Syncing third-party APK package store..." | tee -a "$LOGFILE"
+rm -rf /tmp/store-apk-repo "$BASE_DIR/extra-packages" "$BASE_DIR/packages"
+clone_with_fallback "https://github.com/wukongdaily/apk.git" /tmp/store-apk-repo
+mkdir -p "$BASE_DIR/extra-packages"
+cp -r /tmp/store-apk-repo/run/x86/* "$BASE_DIR/extra-packages/"
+sh "$BASE_DIR/shell/apk-prepare-packages.sh"
 
-  return 1
-}
-
-echo "Syncing third-party package store requested by shell/custom-packages.sh..." | tee -a "$LOGFILE"
-mkdir -p "$BASE_DIR/extra-packages/luci-app-lucky"
+echo "Preparing OpenClash core and rule data..." | tee -a "$LOGFILE"
+mkdir -p "$FILES_DIR/etc/openclash/core" "$FILES_DIR/etc/openclash"
 download_with_fallback \
-  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/luci-app-lucky/luci-app-lucky_1.2.0-r11_all.ipk" \
-  "$BASE_DIR/extra-packages/luci-app-lucky/luci-app-lucky_1.2.0-r11_all.ipk"
+  "https://raw.githubusercontent.com/vernesong/OpenClash/core/master/meta/clash-linux-amd64-v1.tar.gz" \
+  "$BASE_DIR/clash-linux-amd64-v1.tar.gz"
+tar xOzf "$BASE_DIR/clash-linux-amd64-v1.tar.gz" > "$FILES_DIR/etc/openclash/core/clash_meta"
+chmod +x "$FILES_DIR/etc/openclash/core/clash_meta"
 download_with_fallback \
-  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/luci-app-lucky/lucky_2.17.8-r8_x86_64.ipk" \
-  "$BASE_DIR/extra-packages/luci-app-lucky/lucky_2.17.8-r8_x86_64.ipk"
+  "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" \
+  "$FILES_DIR/etc/openclash/GeoIP.dat"
 download_with_fallback \
-  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/ssrp_x86_64-190_r126.run" \
-  "$BASE_DIR/extra-packages/ssrp_x86_64-190_r126.run"
-download_with_fallback \
-  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/luci-app-store-0.1.32-1_all.run" \
-  "$BASE_DIR/extra-packages/luci-app-store-0.1.32-1_all.run"
-download_with_fallback \
-  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/luci-app-uninstall-v1.2.0.run" \
-  "$BASE_DIR/extra-packages/luci-app-uninstall-v1.2.0.run"
-download_with_fallback \
-  "https://raw.githubusercontent.com/wukongdaily/store/master/run/x86/momo_v1.1.0_x86_64.run" \
-  "$BASE_DIR/extra-packages/momo_v1.1.0_x86_64.run"
-download_store_ipk "aurora/luci-theme-aurora_0.11.0-r20260208_all.ipk"
-download_store_ipk "aurora-config/luci-app-aurora-config_0.3.0-r20260208_all.ipk"
-download_store_ipk "aurora-config/luci-i18n-aurora-config-zh-cn_26.037.70024.95fddff_all.ipk"
-download_store_ipk "luci-app-partexp/luci-app-partexp_2.0.2-r20251221_all.ipk"
-download_store_ipk "luci-app-partexp/luci-i18n-partexp-zh-cn_25.355.34625.38e15b6_all.ipk"
-download_store_ipk "luci-app-taskplan/luci-app-taskplan_2.2.4_all.ipk"
-download_store_ipk "luci-app-taskplan/luci-i18n-taskplan-zh-cn_all.ipk"
-download_store_ipk "watchdog/luci-app-watchdog_1.0.6-r20250717_all.ipk"
-download_store_ipk "watchdog/luci-i18n-watchdog-zh-cn_25.191.07803.ff47685_all.ipk"
-download_store_ipk "watchdog/watchdog_1-r5_x86_64.ipk"
-download_store_ipk "bandix/bandix_0.11.0-r1_x86_64.ipk"
-download_store_ipk "bandix/luci-app-bandix_0.11.1-r1_all.ipk"
-download_store_ipk "bandix/luci-i18n-bandix-zh-cn_25.341.50859.dfcede3_all.ipk"
-sh "$BASE_DIR/shell/prepare-packages.sh"
-
-echo "Syncing luci-app-socat from kiddin9 feed..." | tee -a "$LOGFILE"
-download_first_available \
-  "$BASE_DIR/packages/luci-app-socat_1.0-r9_all.ipk" \
-  "https://dl.openwrt.ai/releases/24.10/packages/x86_64/kiddin9/luci-app-socat_1.0-r9_all.ipk" \
-  "https://dl.openwrt.ai/packages-24.10/x86_64/kiddin9/luci-app-socat_1.0-r9_all.ipk"
+  "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" \
+  "$FILES_DIR/etc/openclash/GeoSite.dat"
 
 OFFICIAL_PACKAGES="
 ca-bundle
@@ -189,7 +198,6 @@ luci-proto-wireguard
 kmod-wireguard
 wireguard-tools
 socat
-luci-app-socat
 luci-app-ddns
 luci-app-ddns-go
 ddns-go
@@ -219,9 +227,24 @@ iwlwifi-firmware-ax201
 iwlwifi-firmware-ax210
 iwlwifi-firmware-iwl8265
 iwlwifi-firmware-iwl9260
+tailscale
+luci-app-openclash
+luci-app-passwall
+luci-i18n-passwall-zh-cn
+luci-app-homeproxy
+luci-i18n-homeproxy-zh-cn
+mosdns
+sing-box
+xray-core
+hysteria
+dns2socks
+ipt2socks
+shadowsocks-rust-sslocal
+redsocks2
+ipset
 "
 
-PACKAGES="$(echo "$OFFICIAL_PACKAGES $CUSTOM_PACKAGES" | xargs)"
+PACKAGES="$(echo "$OFFICIAL_PACKAGES $MAXMAI_APK_PACKAGES" | xargs)"
 echo "Package set: $PACKAGES" | tee -a "$LOGFILE"
 
 make image PROFILE="generic" \
@@ -236,42 +259,39 @@ if [ -z "$MANIFEST" ]; then
 fi
 
 REQUIRED_MANIFEST_PACKAGES=(
-  "wpad-openssl"
-  "iw"
-  "iwinfo"
-  "wireless-regdb"
-  "kmod-mac80211"
+  "luci-app-ssr-plus"
+  "luci-app-openclash"
+  "luci-app-passwall"
+  "luci-app-homeproxy"
+  "nikki"
+  "luci-app-nikki"
+  "mosdns"
+  "sing-box"
+  "xray-core"
+  "hysteria"
+  "dns2socks"
+  "ipt2socks"
+  "shadowsocks-rust-sslocal"
+  "tailscale"
   "luci-proto-wireguard"
   "wireguard-tools"
   "socat"
-  "luci-app-socat"
   "ddns-go"
   "luci-app-ddns-go"
   "luci-app-ddns"
   "luci-app-lucky"
   "lucky"
-  "luci-app-ssr-plus"
   "luci-theme-argon"
   "luci-app-argon-config"
   "luci-i18n-argon-config-zh-cn"
   "luci-theme-aurora"
   "luci-app-aurora-config"
   "luci-i18n-aurora-config-zh-cn"
-  "tailscale"
-  "momo"
-  "luci-app-momo"
-  "luci-i18n-momo-zh-cn"
-  "luci-app-uninstall"
-  "luci-app-partexp"
-  "luci-i18n-partexp-zh-cn"
-  "luci-app-watchdog"
-  "luci-i18n-watchdog-zh-cn"
-  "luci-app-taskplan"
-  "luci-i18n-taskplan-zh-cn"
-  "luci-app-bandix"
-  "luci-i18n-bandix-zh-cn"
-  "bandix"
-  "luci-app-store"
+  "wpad-openssl"
+  "iw"
+  "iwinfo"
+  "wireless-regdb"
+  "kmod-mac80211"
 )
 
 for pkg in "${REQUIRED_MANIFEST_PACKAGES[@]}"; do
@@ -282,19 +302,14 @@ for pkg in "${REQUIRED_MANIFEST_PACKAGES[@]}"; do
 done
 
 PROHIBITED_MANIFEST_PACKAGES=(
+  "luci-i18n-dockerman-zh-cn"
   "luci-app-openvpn-server"
-  "luci-app-nekobox"
-  "luci-app-mosdns"
-  "luci-app-passwall2"
-  "luci-app-openclash"
   "luci-app-zerotier"
   "luci-app-adguardhome"
   "luci-app-turboacc"
-  "luci-app-gecoosac"
-  "luci-app-unishare"
+  "luci-app-easytier"
   "luci-app-appfilter"
   "luci-app-netwizard"
-  "luci-app-tailscale"
 )
 
 for pkg in "${PROHIBITED_MANIFEST_PACKAGES[@]}"; do
@@ -303,6 +318,12 @@ for pkg in "${PROHIBITED_MANIFEST_PACKAGES[@]}"; do
     exit 1
   fi
 done
+
+test -x "$FILES_DIR/etc/init.d/maxmai-ssr-bridge"
+test -x "$FILES_DIR/usr/bin/maxmai-ssr-bridge-rules"
+test -x "$FILES_DIR/etc/openclash/core/clash_meta"
+test -s "$FILES_DIR/etc/openclash/GeoIP.dat"
+test -s "$FILES_DIR/etc/openclash/GeoSite.dat"
 
 if find "$FILES_DIR/etc/uci-defaults" -maxdepth 1 -name "99-custom.sh" | grep -q .; then
   echo "Unsafe upstream 99-custom.sh is still present." >&2

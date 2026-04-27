@@ -1,0 +1,142 @@
+name: build-x86-64-maxmai-n100-25.12
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  IMMWRT_VERSION: "25.12.0-rc2"
+  ROOTFS_PARTSIZE_MB: "4096"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout build repo
+        uses: actions/checkout@v4
+
+      - name: Checkout private overlay
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.MAXMAI_OVERLAY_REPO }}
+          ref: maxmai-n100-usb2-v6-25.12-overlay
+          ssh-key: ${{ secrets.MAXMAI_OVERLAY_SSH_KEY }}
+          path: overlay-private
+          persist-credentials: false
+
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          test ! -e files/etc/uci-defaults/99-custom.sh
+          test -e overlay-private/files/etc/config/wireless
+          grep -q "option disabled '1'" overlay-private/files/etc/config/wireless
+          grep -q "config device 'br_lan'" overlay-private/files/etc/config/network
+          grep -q "option name 'br-lan'" overlay-private/files/etc/config/network
+          grep -q "list ports 'eth0'" overlay-private/files/etc/config/network
+          grep -q "option macaddr 'e4:3a:6e:84:35:2d'" overlay-private/files/etc/config/network
+          grep -q "option device 'br-lan'" overlay-private/files/etc/config/network
+          ! grep -q "option ifname 'eth0'" overlay-private/files/etc/config/network
+          grep -q "option device 'eth1'" overlay-private/files/etc/config/network
+          grep -q "config interface 'tailscale'" overlay-private/files/etc/config/network
+          grep -q "list server '1.1.1.1'" overlay-private/files/etc/config/dhcp
+          grep -q "option mediaurlbase '/luci-static/argon'" overlay-private/files/etc/config/luci
+          grep -q "option Argon '/luci-static/argon'" overlay-private/files/etc/config/luci
+          grep -q "option Aurora '/luci-static/aurora'" overlay-private/files/etc/config/luci
+          ! grep -q "/luci-static/ifit" overlay-private/files/etc/config/luci
+          grep -q "list Interface 'tailscale'" overlay-private/files/etc/config/shadowsocksr
+          grep -q "100.64.0.0/10" overlay-private/files/etc/config/shadowsocksr
+          grep -q "maxmai-ssr-bridge-rules" overlay-private/files/etc/firewall.user
+          test -x overlay-private/files/etc/init.d/maxmai-ssr-bridge
+          test -x overlay-private/files/usr/bin/maxmai-ssr-bridge-rules
+          test -e overlay-private/files/etc/shadow
+          git -C overlay-private rev-parse --short HEAD
+
+      - name: Set executable permissions
+        run: chmod +x "${{ github.workspace }}/x86-64/build25-maxmai-n100.sh"
+
+      - name: Build MaxMai N100 ImmortalWrt 25.12 image
+        run: |
+          docker run --rm -i \
+            --user root \
+            -v "${{ github.workspace }}/bin:/home/build/immortalwrt/bin" \
+            -v "${{ github.workspace }}/files:/home/build/immortalwrt/files" \
+            -v "${{ github.workspace }}/overlay-private:/home/build/immortalwrt/overlay-private:ro" \
+            -v "${{ github.workspace }}/x86-64/imm25.config:/home/build/immortalwrt/.config:ro" \
+            -v "${{ github.workspace }}/shell:/home/build/immortalwrt/shell" \
+            -v "${{ github.workspace }}/x86-64/build25-maxmai-n100.sh:/home/build/immortalwrt/build.sh:ro" \
+            -e ROOTFS_PARTSIZE="${ROOTFS_PARTSIZE_MB}" \
+            immortalwrt/imagebuilder:x86-64-openwrt-${IMMWRT_VERSION} \
+            /bin/bash /home/build/immortalwrt/build.sh
+
+      - name: Verify output
+        run: |
+          set -euo pipefail
+          cd "${{ github.workspace }}/bin/targets/x86/64"
+          sudo chown -R "$(id -u):$(id -g)" .
+          IMG="$(ls *squashfs-combined-efi.img.gz | head -n 1)"
+          MANIFEST="$(ls *.manifest | head -n 1)"
+          RAW_TMP="$(mktemp)"
+          set +e
+          gzip -dc "$IMG" > "$RAW_TMP"
+          gzip_status="$?"
+          set -e
+          if [ "$gzip_status" -ne 0 ] && [ "$gzip_status" -ne 2 ]; then
+            exit "$gzip_status"
+          fi
+          gzip -n -9 -c "$RAW_TMP" > "${IMG}.tmp"
+          mv "${IMG}.tmp" "$IMG"
+          rm -f "$RAW_TMP"
+          gzip -t "$IMG"
+          sha256sum "$IMG" "$MANIFEST" > maxmai-n100-sha256.txt
+          for pkg in luci-app-ssr-plus luci-app-openclash luci-app-passwall luci-app-homeproxy nikki luci-app-nikki mosdns sing-box xray-core hysteria dns2socks ipt2socks shadowsocks-rust-sslocal tailscale luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-ddns luci-app-lucky lucky luci-theme-argon luci-app-argon-config luci-theme-aurora luci-app-aurora-config; do
+            grep -Eq "^${pkg} -" "$MANIFEST"
+          done
+          for pkg in luci-i18n-dockerman-zh-cn luci-app-openvpn-server luci-app-zerotier luci-app-adguardhome luci-app-turboacc luci-app-easytier luci-app-appfilter luci-app-netwizard; do
+            ! grep -Eq "^${pkg} -" "$MANIFEST"
+          done
+
+      - name: Create build notes
+        run: |
+          REPO_SHA="$(git rev-parse --short HEAD)"
+          OVERLAY_SHA="$(git -C overlay-private rev-parse --short HEAD)"
+          cat > "${{ github.workspace }}/maxmai-n100-build-info.md" <<EOF
+          ## MaxMai N100 USB-2 ImmortalWrt 25.12 Build
+
+          - Base version: ${IMMWRT_VERSION}
+          - Rootfs partsize: ${ROOTFS_PARTSIZE_MB} MB
+          - Build repo commit: ${REPO_SHA}
+          - Private overlay commit: ${OVERLAY_SHA}
+          - Scope: wired LAN/WAN router, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+, OpenClash, Passwall, HomeProxy, Nikki, MosDNS, sing-box, xray-core, hysteria, Tailscale
+          - Default proxy path: SSR+ node config with MaxMai ss-local + ipt2socks + dns2socks transparent bridge for br-lan and tailscale0
+          - Standby proxy tools: OpenClash, Passwall, HomeProxy, Nikki, MosDNS installed but not intended to take over rules at first boot
+          - LuCI theme: Argon sidebar by default, Aurora installed as standby
+          - Wi-Fi/AP: disabled by default; external AP remains responsible for Wi-Fi coverage
+          - LAN bridge: native br-lan device, fixed MAC e4:3a:6e:84:35:2d
+          - Safety: upstream 99-custom.sh is not included; PPPoE and service secrets come only from private overlay
+          EOF
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: maxmai-n100-immortalwrt-25.12.0-rc2-usb2-v6
+          path: |
+            ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
+            ${{ github.workspace }}/bin/targets/x86/64/*.manifest
+            ${{ github.workspace }}/bin/targets/x86/64/maxmai-n100-sha256.txt
+            ${{ github.workspace }}/maxmai-n100-build-info.md
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2.2.1
+        with:
+          tag_name: maxmai-n100-usb2-v6-25.12
+          body_path: ${{ github.workspace }}/maxmai-n100-build-info.md
+          files: |
+            ${{ github.workspace }}/bin/targets/x86/64/*squashfs-combined-efi.img.gz
+            ${{ github.workspace }}/bin/targets/x86/64/*.manifest
+            ${{ github.workspace }}/bin/targets/x86/64/maxmai-n100-sha256.txt
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

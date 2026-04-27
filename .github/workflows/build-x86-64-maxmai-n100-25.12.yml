@@ -91,7 +91,7 @@ jobs:
           rm -f "$RAW_TMP"
           gzip -t "$IMG"
           sha256sum "$IMG" "$MANIFEST" > maxmai-n100-sha256.txt
-          for pkg in luci-app-ssr-plus luci-app-openclash luci-app-passwall luci-app-homeproxy nikki luci-app-nikki mosdns sing-box xray-core hysteria dns2socks ipt2socks shadowsocks-rust-sslocal tailscale luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-ddns luci-app-lucky lucky luci-theme-argon luci-app-argon-config luci-theme-aurora luci-app-aurora-config; do
+          for pkg in luci-app-openclash luci-app-passwall luci-app-homeproxy nikki luci-app-nikki mosdns sing-box xray-core hysteria dns2socks ipt2socks shadowsocks-rust-sslocal tailscale luci-proto-wireguard wireguard-tools socat ddns-go luci-app-ddns-go luci-app-ddns luci-theme-argon luci-app-argon-config luci-theme-aurora luci-app-aurora-config; do
             grep -Eq "^${pkg} -" "$MANIFEST"
           done
           for pkg in luci-i18n-dockerman-zh-cn luci-app-openvpn-server luci-app-zerotier luci-app-adguardhome luci-app-turboacc luci-app-easytier luci-app-appfilter luci-app-netwizard; do
@@ -109,8 +109,8 @@ jobs:
           - Rootfs partsize: ${ROOTFS_PARTSIZE_MB} MB
           - Build repo commit: ${REPO_SHA}
           - Private overlay commit: ${OVERLAY_SHA}
-          - Scope: wired LAN/WAN router, PPPoE, WireGuard, socat, DDNS, ddns-go, Lucky, SSR+, OpenClash, Passwall, HomeProxy, Nikki, MosDNS, sing-box, xray-core, hysteria, Tailscale
-          - Default proxy path: SSR+ node config with MaxMai ss-local + ipt2socks + dns2socks transparent bridge for br-lan and tailscale0
+          - Scope: wired LAN/WAN router, PPPoE, WireGuard, socat, DDNS, ddns-go, OpenClash, Passwall, HomeProxy, Nikki, MosDNS, sing-box, xray-core, hysteria, Tailscale
+          - Default proxy path: existing Shadowsocks node config with MaxMai ss-local + ipt2socks + dns2socks transparent bridge for br-lan and tailscale0
           - Standby proxy tools: OpenClash, Passwall, HomeProxy, Nikki, MosDNS installed but not intended to take over rules at first boot
           - LuCI theme: Argon sidebar by default, Aurora installed as standby
           - Wi-Fi/AP: disabled by default; external AP remains responsible for Wi-Fi coverage

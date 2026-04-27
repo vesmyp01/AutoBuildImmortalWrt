@@ -137,26 +137,14 @@ clone_with_fallback() {
 }
 
 MAXMAI_APK_PACKAGES="
-luci-app-store
-luci-app-uninstall
 luci-theme-aurora
 luci-app-aurora-config
 luci-i18n-aurora-config-zh-cn
-luci-app-ssr-plus
-momo
-luci-app-momo
-luci-i18n-momo-zh-cn
 luci-app-partexp
 luci-i18n-partexp-zh-cn
-luci-app-watchdog
-luci-i18n-watchdog-zh-cn
-luci-app-taskplan
-luci-i18n-taskplan-zh-cn
 bandix
 luci-app-bandix
 luci-i18n-bandix-zh-cn
-luci-app-lucky
-lucky
 nikki
 luci-app-nikki
 luci-i18n-nikki-zh-cn
@@ -263,7 +251,6 @@ if [ -z "$MANIFEST" ]; then
 fi
 
 REQUIRED_MANIFEST_PACKAGES=(
-  "luci-app-ssr-plus"
   "luci-app-openclash"
   "luci-app-passwall"
   "luci-app-homeproxy"
@@ -283,8 +270,6 @@ REQUIRED_MANIFEST_PACKAGES=(
   "ddns-go"
   "luci-app-ddns-go"
   "luci-app-ddns"
-  "luci-app-lucky"
-  "lucky"
   "luci-theme-argon"
   "luci-app-argon-config"
   "luci-i18n-argon-config-zh-cn"
